@@ -111,3 +111,48 @@ WHERE
 
 
 
+
+
+
+
+
+-- level 2
+-- Write a SQL query to return the top 10 customers who have generated the most revenue for the store, including their names and total revenue generated.
+-- group by customer_id để tránh trường hợp 2 người trùng tên và sql hiểu nhầm để group 
+SELECT 
+    c.first_name,
+    c.last_name,
+    SUM(p.amount) AS total_revenue
+FROM 
+    customer c
+JOIN 
+    payment p ON c.customer_id = p.customer_id
+GROUP BY 
+    c.customer_id, c.first_name, c.last_name
+ORDER BY 
+    total_revenue DESC
+LIMIT 10;
+
+
+
+
+
+-- Write a SQL query to return the names and contact information of all customers who have rented films in all categories in the database.
+-- join từ bảng customer với rental để lấy các lượt thuê của khách hàng
+-- join từ bảng rental với inventory để biết lươt thuê đó thuộc phim nào
+-- join từ inventory với film_category để biết phim đó thuộc thể loại nào (vì inventory có film_id và film_category cũng có film_id)
+-- giữ lại khách hàng có cate khác nhau = tổng cate_id trong category
+SELECT
+    c.first_name,
+    c.last_name, 
+    c.email
+FROM customer c
+JOIN rental r ON c.customer_id = r.customer_id
+JOIN inventory i ON r.inventory_id = i.inventory_id
+JOIN film_category fc ON i.film_id = fc.film_id
+GROUP BY c.customer_id, c.first_name, c.last_name, c.email
+HAVING 
+	(COUNT(DISTINCT fc.category_id)) = (SELECT COUNT(*) FROM category);
+
+
+
