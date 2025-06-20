@@ -1,3 +1,4 @@
+use sakila;
 -- Level 1:
 -- Write a SQL query to return the first and last names of all actors in the database.
 select first_name, last_name 
@@ -351,6 +352,499 @@ HAVING COUNT(DISTINCT r.customer_id) = (
     JOIN category cat2 ON fc3.category_id = cat2.category_id
     WHERE cat2.name = 'Action'
 );
+
+
+
+
+
+
+
+
+
+
+
+
+-- LEVEL 3
+
+
+
+-- Write a SQL query to return the average rental duration for each combination of actor and category in the database, excluding actors who have not appeared in any films in a category.
+-- Tìm các phim mà diễn viên đã tham gia
+-- Lấy thông tin các phim đó, bao gồm rental_duration
+--  Tìm thể loại của từng phim.
+-- gom nhóm 
+
+
+SELECT 
+    a.actor_id,
+    CONCAT(a.first_name, ' ', a.last_name) AS actor_name,
+    c.category_id,
+    c.name AS category_name,
+    AVG(f.rental_duration) AS avg_rental_duration
+FROM actor a
+JOIN film_actor fa ON a.actor_id = fa.actor_id
+JOIN film f ON fa.film_id = f.film_id
+JOIN film_category fc ON f.film_id = fc.film_id
+JOIN category c ON fc.category_id = c.category_id
+GROUP BY a.actor_id, c.category_id, actor_name, category_name;
+
+
+
+
+
+
+
+
+-- Write a SQL query to return the names of all actors who have appeared in a film with a rating of 'R' and a length of more than 2 hours, but have never appeared in a film with a rating of 'G'.
+
+-- Chọn những diễn viên đóng phim R, length > 120 and not in đóng phim G
+
+SELECT DISTINCT CONCAT(a.first_name, ' ', a.last_name) AS actor_name
+FROM actor a
+JOIN film_actor fa ON a.actor_id = fa.actor_id
+JOIN film f ON fa.film_id = f.film_id
+WHERE f.rating = 'R' AND f.length > 120
+  AND a.actor_id NOT IN (
+      SELECT fa2.actor_id
+      FROM film_actor fa2
+      JOIN film f2 ON fa2.film_id = f2.film_id
+      WHERE f2.rating = 'G'
+  );
+
+
+
+
+
+
+-- Write a SQL query to return the names of all customers who have rented more than 10 films in a single transaction, along with the number of films they rented and the total rental fee.
+-- xác định lần thuê phim của customer từ rental join customer
+-- rental join với payment để lấy phần thanh toán
+-- HAVING COUNT(*) > 10: giữ lại những nhóm mà khách thuê nhiều hơn 10 phim trong một ngày (transaction)
+
+SELECT 
+    c.customer_id,
+    CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+    DATE(r.rental_date) AS rental_day,
+    COUNT(*) AS films_rented,
+    SUM(p.amount) AS total_fee
+FROM customer c
+JOIN rental r ON c.customer_id = r.customer_id
+JOIN payment p ON r.rental_id = p.rental_id
+GROUP BY c.customer_id, customer_name, rental_day
+HAVING COUNT(*) > 10;
+
+
+
+
+
+
+
+
+
+
+-- Write a SQL query to return the titles of all films in the database that have been rented by the same customer more than once in a single day, along with the names of the customers who rented them and the number of times they were rented.
+-- rental JOIN inventory i ON r.inventory_id = i.inventory_id -> tìm ra film_id từ bản sao
+-- JOIN film f ON i.film_id = f.film_id (biết đây là film title mà khách thuê)
+-- rental join với customer để tìm khách thuê
+-- giữ lại nếu nhiều hơn 1
+SELECT 
+    f.title,
+    CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+    DATE(r.rental_date) AS rental_day,
+    COUNT(*) AS times_rented
+FROM rental r
+JOIN inventory i ON r.inventory_id = i.inventory_id
+JOIN film f ON i.film_id = f.film_id
+JOIN customer c ON r.customer_id = c.customer_id
+GROUP BY f.film_id, r.customer_id, DATE(r.rental_date), f.title, customer_name
+HAVING COUNT(*) > 1;
+
+
+
+
+
+
+
+
+
+
+-- Write a SQL query to return the names of all actors who have appeared in at least one film with every other actor in the database, along with the number of films they appeared in together.
+-- Lấy danh sách phim mà diễn viên A (a1) đã đóng
+-- Lấy tất cả diễn viên khác (fa2.actor_id) cũng đóng trong cùng các phim mà a1 đã tham gia.
+-- Lấy thông tin chi tiết của bạn diễn (a2) 
+-- Loại bỏ trường hợp diễn viên đóng phim với chính mình (WHERE a1.actor_id <> a2.actor_id)
+-- GROUP BY a1.actor_id, actor_name, co_actor_name
+--  HAVING: chỉ giữ những diễn viên đã hợp tác với mọi người khác
+SELECT 
+    a1.actor_id AS actor_id,
+    CONCAT(a1.first_name, ' ', a1.last_name) AS actor_name,
+    CONCAT(a2.first_name, ' ', a2.last_name) AS co_actor_name,
+    COUNT(DISTINCT fa1.film_id) AS films_together
+FROM actor a1
+JOIN film_actor fa1 ON a1.actor_id = fa1.actor_id
+JOIN film_actor fa2 ON fa1.film_id = fa2.film_id
+JOIN actor a2 ON fa2.actor_id = a2.actor_id
+WHERE a1.actor_id <> a2.actor_id
+GROUP BY a1.actor_id, actor_name, co_actor_name
+HAVING COUNT(DISTINCT fa1.film_id) >= (
+    SELECT COUNT(*) - 1 FROM actor
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Write a SQL query to return the names of all customers who have rented at least one film from each category in the database, along with the number of films rented from each category.
+-- Tìm những customer thuê đủ mọi category
+SELECT r.customer_id
+FROM rental r
+JOIN inventory i ON r.inventory_id = i.inventory_id
+JOIN film_category fc ON i.film_id = fc.film_id
+GROUP BY r.customer_id
+HAVING COUNT(DISTINCT fc.category_id) = (SELECT COUNT(*) FROM category)
+
+-- Với những customer trên, đếm số phim thuê từ từng category:
+SELECT 
+    CONCAT(c.first_name, ' ', c.last_name) AS customer_name,
+    cat.name AS category_name,
+    COUNT(*) AS films_rented
+FROM customer c
+JOIN rental r ON c.customer_id = r.customer_id
+JOIN inventory i ON r.inventory_id = i.inventory_id
+JOIN film_category fc ON i.film_id = fc.film_id
+JOIN category cat ON fc.category_id = cat.category_id
+WHERE c.customer_id IN (
+    SELECT r.customer_id
+    FROM rental r
+    JOIN inventory i ON r.inventory_id = i.inventory_id
+    JOIN film_category fc ON i.film_id = fc.film_id
+    GROUP BY r.customer_id
+    HAVING COUNT(DISTINCT fc.category_id) = (SELECT COUNT(*) FROM category)
+)
+GROUP BY customer_name, cat.name
+ORDER BY customer_name, cat.name;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Write a SQL query to return the titles of all films in the database that have been rented more than 100 times, but have never been rented by any customer who has rented a film with a rating of 'G'.
+
+-- Đếm số lần thuê của từng phim
+-- 
+-- Loại bỏ các phim được thuê bởi khách hàng đã từng thuê phim rating 'G'
+
+SELECT f.title
+FROM film f
+JOIN inventory i ON f.film_id = i.film_id
+JOIN rental r ON i.inventory_id = r.inventory_id
+WHERE f.film_id NOT IN (
+    SELECT DISTINCT f2.film_id
+    FROM film f2
+    JOIN inventory i2 ON f2.film_id = i2.film_id
+    JOIN rental r2 ON i2.inventory_id = r2.inventory_id
+    WHERE r2.customer_id IN (
+        SELECT DISTINCT r3.customer_id
+        FROM rental r3
+        JOIN inventory i3 ON r3.inventory_id = i3.inventory_id
+        JOIN film f3 ON i3.film_id = f3.film_id
+        WHERE f3.rating = 'G'
+    )
+)
+GROUP BY f.film_id, f.title
+HAVING COUNT(*) > 100;
+
+
+
+
+
+
+
+
+-- Write a SQL query to return the names of all customers who have rented a film from a category they have never rented from before, and have also never rented a film longer than 3 hours.
+
+-- Đã từng thuê một phim thuộc thể loại mà trước đó họ chưa từng thuê
+-- Chưa bao giờ thuê bất kỳ phim nào có độ dài > 3 giờ (tức là length > 180 phút)
+
+SELECT DISTINCT CONCAT(c.first_name, ' ', c.last_name) AS customer_name
+FROM customer c
+JOIN rental r ON c.customer_id = r.customer_id
+JOIN inventory i ON r.inventory_id = i.inventory_id
+JOIN film f ON i.film_id = f.film_id
+JOIN film_category fc ON f.film_id = fc.film_id
+WHERE NOT EXISTS (
+    -- Kiểm tra nếu khách từng thuê phim dài hơn 180 phút
+    SELECT 1
+    FROM rental r2
+    JOIN inventory i2 ON r2.inventory_id = i2.inventory_id
+    JOIN film f2 ON i2.film_id = f2.film_id
+    WHERE r2.customer_id = c.customer_id AND f2.length > 180
+)
+AND EXISTS (
+    -- Kiểm tra xem họ đã từng thuê một thể loại mà trước đó họ chưa từng thuê
+    SELECT 1
+    FROM rental r3
+    JOIN inventory i3 ON r3.inventory_id = i3.inventory_id
+    JOIN film f3 ON i3.film_id = f3.film_id
+    JOIN film_category fc3 ON f3.film_id = fc3.film_id
+    WHERE r3.customer_id = c.customer_id
+    AND fc3.category_id NOT IN (
+        -- Tập thể loại mà khách này đã thuê trước thời điểm đó
+        SELECT DISTINCT fc4.category_id
+        FROM rental r4
+        JOIN inventory i4 ON r4.inventory_id = i4.inventory_id
+        JOIN film f4 ON i4.film_id = f4.film_id
+        JOIN film_category fc4 ON f4.film_id = fc4.film_id
+        WHERE r4.customer_id = c.customer_id
+        AND r4.rental_date < r3.rental_date
+    )
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- Write a SQL query to return the names of all actors who have appeared in a film with a rating of 'PG-13' and a length of more than 2 hours, and have also appeared in a film with a rating of 'R' and a length of less than 90 minutes.
+
+SELECT CONCAT(a.first_name, ' ', a.last_name) AS actor_name
+FROM actor a
+WHERE EXISTS (
+    -- Phim PG-13 dài hơn 2 giờ
+    SELECT 1
+    FROM film_actor fa1
+    JOIN film f1 ON fa1.film_id = f1.film_id
+    WHERE fa1.actor_id = a.actor_id
+      AND f1.rating = 'PG-13'
+      AND f1.length > 120
+)
+AND EXISTS (
+    -- Phim R ngắn hơn 90 phút
+    SELECT 1
+    FROM film_actor fa2
+    JOIN film f2 ON fa2.film_id = f2.film_id
+    WHERE fa2.actor_id = a.actor_id
+      AND f2.rating = 'R'
+      AND f2.length < 90
+);
+
+
+
+
+
+-- LEVEL 4
+
+-- Write a SQL query to update the rental rate of all films in the database that have been rented more than 100 times, setting the new rental rate to be 10% higher than the current rate.
+-- get film có lượt thuê > 100 lần
+-- Duyệt qua từng film trong bảng 
+-- tìm tất cả bản copy trong inventory 
+-- lấy tất cả lần mà bản copy được thuê 
+-- update lên 10%
+
+UPDATE film
+SET rental_rate = rental_rate * 1.10
+WHERE film_id IN (
+    SELECT f.film_id
+    FROM film f
+    JOIN inventory i ON f.film_id = i.film_id
+    JOIN rental r ON i.inventory_id = r.inventory_id
+    GROUP BY f.film_id
+    HAVING COUNT(*) > 100
+);
+
+
+
+
+
+-- Write a SQL query to update the rental duration of all films in the database that have been rented more than 5 times, setting the new duration to be 5% longer than the current duration.
+-- gần giông bài trên 
+UPDATE film
+SET rental_duration = ROUND(rental_duration * 1.05)
+WHERE film_id IN (
+    SELECT f.film_id
+    FROM film f
+    JOIN inventory i ON f.film_id = i.film_id
+    JOIN rental r ON i.inventory_id = r.inventory_id
+    GROUP BY f.film_id
+    HAVING COUNT(*) > 5
+);
+
+
+
+
+-- Write a SQL query to update the rental rate of all films in the 'Action' category that were released before the year 2005, setting the new rate to be 20% higher than the current rate.
+-- join film với category thôi
+UPDATE film
+SET rental_rate = rental_rate * 1.20
+WHERE film_id IN (
+    SELECT f.film_id
+    FROM film f
+    JOIN film_category fc ON f.film_id = fc.film_id
+    JOIN category c ON fc.category_id = c.category_id
+    WHERE c.name = 'Action'
+      AND f.release_year < 2005
+);
+
+
+
+
+
+
+
+-- Write a SQL query to update the email address of all customers who have rented a film from the 'Horror' category in the month of October 2022, setting the new email address to be a combination of their current email address and the string 'horrorlover'.
+-- lấy lượt thuê phim của khách
+-- Lấy film cụ thể từ bảng inventory
+-- Lấy thông tin film
+-- Lấy thông tin thể loại 
+-- get thể loại = hornor
+UPDATE customer
+SET email = CONCAT(email, 'horrorlover')
+WHERE customer_id IN (
+    SELECT DISTINCT c.customer_id
+    FROM customer c
+    JOIN rental r ON c.customer_id = r.customer_id
+    JOIN inventory i ON r.inventory_id = i.inventory_id
+    JOIN film f ON i.film_id = f.film_id
+    JOIN film_category fc ON f.film_id = fc.film_id
+    JOIN category cat ON fc.category_id = cat.category_id
+    WHERE cat.name = 'Horror'
+      AND r.rental_date >= '2022-10-01'
+      AND r.rental_date <  '2022-11-01'
+);
+
+
+
+
+
+-- Write a SQL query to update the rental rate of all films in the database that have been rented by more than 10 customers, setting the new rate to be 5% higher than the current rate, but not higher than $4.00.
+-- LEAST(rental_rate * 1.05, 4.00)
+-- LEAST() chọn giá trị nhỏ hơn giữa:
+-- Giá mới sau khi tăng 5%
+-- Và $4.00
+
+UPDATE film
+SET rental_rate = LEAST(rental_rate * 1.05, 4.00)
+WHERE film_id IN (
+    SELECT f.film_id
+    FROM film f
+    JOIN inventory i ON f.film_id = i.film_id
+    JOIN rental r ON i.inventory_id = r.inventory_id
+    GROUP BY f.film_id
+    HAVING COUNT(DISTINCT r.customer_id) > 10
+);
+
+
+
+
+-- Write a SQL query to update the rental rate of all films in the database that have a rating of 'PG-13' and a length of more than 2 hours, setting the new rate to be $3.50.
+update film
+set rental_rate = 3.50
+WHERE rating = 'PG-13'
+  AND length > 120;
+
+
+
+
+
+-- Write a SQL query to update the rental duration of all films in the 'Sci-Fi' category that were released in the year 2010, setting the new duration to be equal to the length of the film in minutes.
+
+UPDATE film
+SET rental_duration = length
+WHERE film_id IN (
+    SELECT f.film_id
+    FROM film f
+    JOIN film_category fc ON f.film_id = fc.film_id
+    JOIN category c ON fc.category_id = c.category_id
+    WHERE c.name = 'Sci-Fi'
+      AND f.release_year = 2010
+);
+
+
+
+
+
+-- Write a SQL query to update the address of all customers who live in the same city as another customer with the same last name, setting the new address to be the concatenation of their current address and the string 'samecity'.
+-- tự join với chính customer để so sánh lastname 
+-- <> nghĩa là khác nhau customer_id_1 != customer_id_2
+UPDATE customer
+SET address = CONCAT(address, 'samecity')
+WHERE customer_id IN (
+    SELECT c1.customer_id
+    FROM customer c1
+    JOIN customer c2
+      ON c1.last_name = c2.last_name
+     AND c1.city_id = c2.city_id
+     AND c1.customer_id <> c2.customer_id
+);
+
+
+
+
+
+
+
+
+
+-- Write a SQL query to update the rental rate of all films in the 'Comedy' category that were released in the year 2007 or later, setting the new rate to be 15% lower than the current rate.
+-- join với cate thôi 
+UPDATE film
+SET rental_rate = rental_rate * 0.85
+WHERE film_id IN (
+    SELECT f.film_id
+    FROM film f
+    JOIN film_category fc ON f.film_id = fc.film_id
+    JOIN category c ON fc.category_id = c.category_id
+    WHERE c.name = 'Comedy'
+      AND f.release_year >= 2007
+);
+
+
+
+-- Write a SQL query to update the rental rate of all films in the database that have a rating of 'G' and a length of less than 1 hour, setting the new rate to be $1.50.
+UPDATE film
+SET rental_rate = 1.50
+WHERE rating = 'G'
+  AND length < 60;
+
+
+
+
+
+
 
 
 
